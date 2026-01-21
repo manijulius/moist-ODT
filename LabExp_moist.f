@@ -1,7 +1,25 @@
-       program LabExp
+c     Mani Rajagopal
+c     Oct 1 2023
+c     I copied this program from Kamal's version of mrbc 
+c     and made the following changes
+c     1) Make bottom plate as 0 and top plate as  1 as opposed to 
+c        Kamal's version that treats bottom plate as 1
+c        and top plate as 0. It didn't affect results except that 
+c        plots need to be flipped
+c        1 would be bottom and 0 would be top  
+c     2) uses temperature in Kelvin to compute the density 
+c         and RBC parameters as opposed to Kamal's version that 
+c         uses Celsius. It impact is small on the profiles of 
+c         scalar's mean and variance
+c     3) added comments
+c     4) Run multiple realizations 
+c     5) structure input and output into different directories
+c     6) output evolution of temperature and covariance of T and qv
+
+      program LabExp
        implicit none
        integer M, L, idum, iy, Length
-       integer N, Lo, Lp, Lm,j
+       integer N, Lo, Lp, Lm,j, fhdl_eddy, fhdl_etime
        integer NL(100000), ir(97), num_args, realz_int
        character(len=32), dimension(:), allocatable :: args
        character(len=:), allocatable :: input_dir,cmd_str,exp_name
@@ -74,6 +92,10 @@ c      change to parent directory
        cmd_str   = "mkdir -p output/"//exp_name//"/"//realization
        write(*,*) "cmd: ",cmd_str
        call system(cmd_str)
+       cmd_str  = "cp input/"//input_dir//"/LabExppar.dat"
+       cmd_str  =cmd_str//" output/"//exp_name//"/"//realization//"/"
+       write(*,*) "cmd:",cmd_str
+       call system(cmd_str)
        cmd_str   = "output/"//exp_name//"/"//realization
 c      excecuting cd did not work. so using chdir       
        call chdir(cmd_str)
@@ -81,7 +103,10 @@ c      excecuting cd did not work. so using chdir
        
        open(101, file="EddyDiagram.dat",status="unknown")
        open(102, file="Warnings.dat", status="unknown")
-       
+       fhdl_eddy = 103
+       open(fhdl_eddy,file = "eddy.txt")
+       fhdl_etime = 104
+       open(fhdl_etime,file = "eddy_time.txt")
        write(6,*) "tmax,t", tmax, dt
 
 c      Mani:Use random.dat to find random number generator's probability distribution
@@ -103,7 +128,7 @@ c       track time and time step
            write(*,'(A24, 2G12.2)') "tmax, dt:",        tmax, dt
            write(*,*)
            
-c         exit
+c          exit
         endif
 
 c       call diffusion  and compute stats
@@ -150,9 +175,13 @@ c       w/o call to eddy or diffusion
 c         write(6,*) "random value < p", p
 c         call energy(N,M,M+L,a(2),u,v,w,T)
          call eddy(N,M,L,u,v,w,T,pv,uK,vK,wK,PE,a(12))
+         write(fhdl_eddy,'(10000E16.4)') T(1:N)
 c         call energy(N,M,M+L,a(2),u,v,w,T)
          call vis(N,u,v,w,time-te,a(9),a(10))
          call difT(N,T,pv,time-te,a(4),Sc)
+         write(fhdl_eddy,'(10000E16.4)') T(1:N)
+         write(fhdl_etime,'(2E16.4)') time, time-te
+         
          call compsup(N,T,pv,s,Tdif,T_o,p_atm)
          call statsvel(N,u,ua,ur,eu,v,va,vr,ev,w,wa,wr,ew,time-te)
          call statsdens(N,T,pv,s,Ta,pva,sa,Tr,pvr,sr,eT
@@ -213,18 +242,55 @@ c         call energy(N,M,M+L,a(2),u,v,w,T)
        double precision Tv(100000)
        double precision TK, p, x, psiK
        double precision Tdif, T_o, pv_o, pvdif
+c       bot as 0 top as 1 change
+        double precision T_b,pv_b,T_t,pv_t,T_cell,pv_cell
+        double precision Tv_b,Tv_t,Tvdif
+        integer Tvoob
 
-       x = (1.d0*L)/(1.d0*N)
+       x       = (1.d0*L)/(1.d0*N)
+
+       T_b     = T_o  + Tdif/2.0d0
+       T_t     = T_o  - Tdif/2.0d0
+       pv_b    = pv_o + pvdif/2.0d0
+       pv_t    = pv_o - pvdif/2.0d0
+       Tv_b    = (T_b+273.15) * (1.0d0 + pv_b/0.622d0)/(1.0d0+pv_b)
+       Tv_t    = (T_t+273.15) * (1.0d0 + pv_t/0.622d0)/(1.0d0+pv_t)
+       Tvdif   = (Tv_b - Tv_t) 
+       Tvoob = 0
 
         do j = 1, N
-          Tv(j)=((((T(j)-0.5d0)*Tdif+T_o)*
-     +          (1.d0+((pv(j)-0.5d0)*pvdif+pv_o)/0.622d0)
-     +          /(1.d0+((pv(j)-0.5d0)*pvdif+pv_o)))-T_o+Tdif*0.5d0)/Tdif
+c         bot as 0 top as 1 change
+c          T_cell  = T_b  - T(j) * Tdif 
+c          pv_cell = pv_b - pv(j) * pvdif
+c          compute virtual temperature
+c          Tv(j)   = (T_cell+ 273.15)*(1.0d0 + pv_cell/0.622d0)/
+c     +              (1.0d0+pv_cell)
+c         convert to value between 0 and 1
+c          Tv(j)   = (Tv_b - Tv(j))/Tvdif
+c         Find if Tv can be negative if Tv > Tv_b
+
+c          Consider bot as 1 and top as 0
+c          Tv(j)=((((T(j)-0.5d0)*Tdif+T_o)*
+c     +          (1.d0+((pv(j)-0.5d0)*pvdif+pv_o)/0.622d0)
+c     +          /(1.d0+((pv(j)-0.5d0)*pvdif+pv_o)))-T_o+Tdif*0.5d0)/Tdif
+
+c          Consider bot as 0 and top as 1
+          Tv(j) =(T_b - ((T_b - T(j)*Tdif)*
+     +           (1.d0+ (pv_b - pv(j)*pvdif)/0.622d0)
+     +          /(1.d0+ (pv_b - pv(j)*pvdif))))/Tdif
+
+          if (Tv(j) < 0 .or. Tv(j) > 1) then
+            !write(*,'(A,F12.8)') "Note: Tv < 0: ", Tv(j)
+            Tvoob  = Tvoob + 1
+          endif  
+
         enddo
+
 
        uK = psiK(N,M,L,u)
        vK = psiK(N,M,L,v)
        wK = psiK(N,M,L,w)
+c      bot 0 and top 1 change ; remove "-" sign
        TK = -psiK(N,M,L,Tv)
        PE = a(2)*TK*x
        KE = ((1.d0 - a(12))*wK*wK) + (a(12)*((uK*uK)
@@ -232,8 +298,10 @@ c         call energy(N,M,M+L,a(2),u,v,w,T)
        p = ((KE + PE)*x*x) - a(11)
 
        if (p .gt. 0.d0) then
-
         prob = a(1)*(1.d0-x)*dsqrt(p)*dexp(3.d0*a(14)/(x*N))/(x*x)
+c        write(*, '(A,I6)') "Tv out of bounds:", Tvoob
+c        write(*, '(A,F12.8)') "Tv min:", minval(Tv)
+c        write(*, '(A,F12.8)') "Tv max:", maxval(Tv)
        else
         prob = 0.d0
        endif
@@ -563,6 +631,8 @@ c      grid cells +/- 5 levels above and below kth cell
        do j = -w, w
 c      don't know why the PDF is shifted by 500 position
 c      I think this allows to sub-saturation values with negative s values
+c      s_limit value is 30 and x is 1000, this allow for supersaturation to be
+c      divided in to 33 bins
            i = int(X/2+X*(s(j+k(1))-s_m)/s_limit+1)
            pdf(1,i) = pdf(1,i) + dt
 
@@ -1218,7 +1288,7 @@ c       removed '-' above
        double precision T(100000), pv(100000), s(100000)
        double precision Tdif, T_o, p_atm
        double precision pvT(2)
-       double precision es_b, es_t, pv_t, pv_b, pv_sat
+       double precision es_b, es_t, pv_t, pv_b, pv_sat, T_cell, T_b
  10    format(g16.8)
        pvT(1)= 0.d0
        pvT(2)= 0.d0
@@ -1235,19 +1305,32 @@ c       removed '-' above
        pv_t = 0.622d0*es_t/(p_atm-es_t)
        pv_b = 0.622d0*es_b/(p_atm-es_b)
 
+       T_b  = T_o+Tdif/2.d0
 
        do j = 1, N
 c      Seems like T and pv have values between 0 and 1;
 c      multiplying by Tdiff will scale them back; then add to Ttop, which is 0
-           pv_sat = 6.112d0*dexp(17.67d0*(T(j)*Tdif+T_o-Tdif/2.d0)
-     +               /(T(j)*Tdif+T_o-Tdif/2+243.5d0))*100.d0
+
+c      pv_sat = 6.112d0*dexp(17.67d0*(T(j)*Tdif+T_o-Tdif/2.d0) 
+c     +               /(T(j)*Tdif+T_o-Tdif/2+243.5d0))*100.d0
+
+c      bot 0 and top 1 change    
+           T_cell =  T_b - T(j)*Tdif
+           pv_sat = 6.112d0*dexp(17.67d0*T_cell
+     +               /(T_cell+243.5d0))*100.d0
 
            pv_sat = 0.622d0*pv_sat/(p_atm-pv_sat)
-c      any scalar can be obtained from scaling back for values between 0 and 1
-           s(j) = ((pv(j)*(pv_b-pv_t)+pv_t)/pv_sat-1.d0)*100.d0
+c       any scalar can be obtained by scaling back for values between 0 and 1
+       
+c       s(j) = ((pv(j)*(pv_b-pv_t)+pv_t)/pv_sat-1.d0)*100.d0
+c       bot 0 and top 1 change        
+        s(j) = ((pv_b - pv(j)*(pv_b-pv_t))/pv_sat-1.d0)*100.d0
 
        enddo
+c       write(*,*) " "
+c       write(*,'(A,3F16.4)') "SS mean, min, max :", 
+c     +      (sum(s(1:N))/N), minval(s(1:N)), maxval(s(1:N))
+       
+      return
 
-       return
-
-       end
+      end

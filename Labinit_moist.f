@@ -1,3 +1,20 @@
+c     Mani Rajagopal
+c     Oct 1 2023
+c     I copied this program from Kamal's version of mrbc 
+c     and made following changes
+c     1) Make bottom plate as 0 and top plate as  1 as opposed to 
+c        Kamal's version that treats bottom plate as 1
+c        and top plate as 0. It didn't affect results except that 
+c        plots need to be flipped
+c        1 would be bottom and 0 would be top  
+c     2) uses temperature in Kelvin to compute the density 
+c         and RBC parameters as opposed to Kamal's version that 
+c         uses Celsius. It impact is small on the profiles of 
+c         scalar's mean and variance
+c     3) added comments
+c     4) Reduce initial guess for dt to by  factor of 1e-3
+c     5) Save the files generated to the input directory
+
        program Labinit
        implicit none
        integer N, Lo, Lp, Lm, j
@@ -50,15 +67,15 @@ c      non-dim kolmogorov scale
        ZC2 = 1.d5
        chi = 0.d0
 c      number of grid cells
-       N = 12000
+       N = 6000
 c      smallest eddy size
        Lo = 25
 c      highly probable eddy size
        Lp = 100
 c      largest eddy size
-       Lm = (N/3)
+       Lm = N/3
 c      time step
-       dt = 1.d3/(1.d0*N*N)
+       dt = 1.d0/(1.d0*N*N)
 c      max simulation time
        tmax = 1.d-3
 c      vapor pressure at top plate Tt = (T0-Tdiff) in celsius
@@ -71,8 +88,8 @@ c      mixing ratios
        pv_t = 0.622d0*es_t/(p-es_t)
        pv_b = 0.622d0*es_b/(p-es_b)
 c      Virtual temperature
-       Tv_t = (T_o-Tdif/2.d0)*(1.d0+pv_t/0.622d0)/(1.d0+pv_t)
-       Tv_b = (T_o+Tdif/2.d0)*(1.d0+pv_b/0.622d0)/(1.d0+pv_b)
+       Tv_t = (T_o-Tdif/2.d0+273.15)*(1.d0+pv_t/0.622d0)/(1.d0+pv_t)
+       Tv_b = (T_o+Tdif/2.d0+273.15)*(1.d0+pv_b/0.622d0)/(1.d0+pv_b)
 c      difference b/w virtual temperature and mixing ratio
        Tdif_e = Tv_b-Tv_t
        pvdif = pv_b-pv_t
@@ -87,6 +104,12 @@ c      non-dimensional velocity difference
        Up = dsqrt(C2)*Uo*H/nu
 c      non-dimensional coriolis factor
        fp = f*H*H/nu
+        
+       call system("mkdir -p input/default");
+       call chdir("input/default/")
+       write(*,*) "Writing file LabExppar.dat with init params to"
+       call system("pwd")
+
        open(100,file="LabExppar.dat", status="unknown")
        write(100,10) N
        write(100,20) bT, Pr, Sc
