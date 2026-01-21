@@ -4,7 +4,7 @@ Kamal Chandrakar modified the ODT model to include water vapor. The moist RBC co
  
 # Contributions
 * **Kamal Chandrakar** (v1.0.0) modified the ODT model code to include water vapor as another scalar in addition to temperature. This includes adding required state variables, initial and boundary conditions, outputs for water vapor/supersaturation, and water vapor effects on turbulence via buoyancy.
-* **Mani Rajagopal** (v2.0.0) modified the moist-ODT code  from Kamal Chandrakar to output eddy information, scalar probability distribution, covariances, and evolution of domain statistics. Also included is code for input and output to the respective folders, as well as a random initial perturbation seed (as command line argument) to run ensembles of experiments.
+* **Mani Rajagopal** (v2.0.0) modified the moist-ODT code  from Kamal Chandrakar to output eddy information, scalar probability distribution, covariances, and evolution of domain statistics. Also included is code for input and output to the respective folders, as well as a random initial perturbation seed (as command line argument) to run ensemble of experiments.
 
 # References
 Chandrakar, K. K., Cantrell, W., Krueger, S., Shaw, R. A., & Wunsch, S. (2020). Supersaturation fluctuations in moist turbulent Rayleigh–Bénard convection: A two-scalar transport problem. Journal of Fluid Mechanics, 884, A19.
